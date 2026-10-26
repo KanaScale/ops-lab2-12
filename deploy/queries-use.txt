@@ -1,0 +1,27 @@
+# 资源层：USE（L-08 第 5 页），数据来自 node_exporter。scripts/run.sh 把结果写进 runs/<名字>/use.csv。
+# ${cpus} 是 enrolld 绑定的核（如 1|2|3），${disk} 是数据目录所在的磁盘（如 vda），都由 run.sh 填好。
+# 比例类的值在 0～1 之间，例如 0.85 表示 85%。
+
+# ---- CPU ----
+# U：enrolld 那几个核的忙碌比例；整机的忙碌比例。iowait 是“核空着、但有 I/O 没完成”，不算忙
+svc_cpu_busy        sum(rate(node_cpu_seconds_total{mode!~"idle|iowait",cpu=~"${cpus}"}[${window}])) / count(node_cpu_seconds_total{mode="idle",cpu=~"${cpus}"})
+all_cpu_busy        sum(rate(node_cpu_seconds_total{mode!~"idle|iowait"}[${window}])) / count(node_cpu_seconds_total{mode="idle"})
+# 被宿主机拿走的时间（%st，L-07 第 9 页）和等 I/O 的时间
+cpu_steal           avg(rate(node_cpu_seconds_total{mode="steal"}[${window}]))
+cpu_iowait          avg(rate(node_cpu_seconds_total{mode="iowait"}[${window}]))
+# S：可运行的线程数（vmstat 的 r），以及“至少有一个任务在等 CPU”的时间比例（PSI）
+procs_running_avg   avg_over_time(node_procs_running[${window}])
+cpu_psi_some        rate(node_pressure_cpu_waiting_seconds_total[${window}])
+
+# ---- 内存 ----
+mem_available_min_mb  min_over_time(node_memory_MemAvailable_bytes[${window}]) / 1048576
+swap_in_per_s       rate(node_vmstat_pswpin[${window}])
+
+# ---- 磁盘（iostat -x 的同名列） ----
+disk_w_per_s        rate(node_disk_writes_completed_total{device="${disk}"}[${window}])
+disk_wkb_per_s      rate(node_disk_written_bytes_total{device="${disk}"}[${window}]) / 1024
+disk_w_await_ms     1000 * rate(node_disk_write_time_seconds_total{device="${disk}"}[${window}]) / rate(node_disk_writes_completed_total{device="${disk}"}[${window}])
+disk_f_per_s        rate(node_disk_flush_requests_total{device="${disk}"}[${window}])
+disk_f_await_ms     1000 * rate(node_disk_flush_requests_time_seconds_total{device="${disk}"}[${window}]) / rate(node_disk_flush_requests_total{device="${disk}"}[${window}])
+disk_aqu_sz         rate(node_disk_io_time_weighted_seconds_total{device="${disk}"}[${window}])
+disk_util           rate(node_disk_io_time_seconds_total{device="${disk}"}[${window}])

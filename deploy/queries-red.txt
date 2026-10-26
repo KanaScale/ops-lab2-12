@@ -1,0 +1,39 @@
+# 服务层：RED，再加上“它在等什么”（L-08 第 6 页）。scripts/run.sh 每次实验结束后用 promsteps 对每个阶段执行一遍，
+# 结果写进 runs/<名字>/red.csv。
+#
+# 每行：名字  PromQL。${window} 是阶段窗口（阶段时长减去开头 5 s）；${route}、${slo} 由 run.sh 填：
+# route 是压测的那个接口，slo 是延迟阈值（秒）。每条查询只能返回一条序列，需要时用 sum(...) 聚合。
+
+# ---- 任务 1：RED 的三条线，以及最后一行的 SLI。把 TODO 换成你们写的 PromQL（参考 L-08 第 25 页），只看 route="${route}" 这个接口 ----
+# 每秒处理完的请求数（所有状态码）
+server_rps          TODO
+# 5xx 占全部请求的比例。没有 5xx 时分子查不到任何序列，整个结果是空的，而不是 0；想要 0 可以在分子后面加 or vector(0)
+server_error_rate   TODO
+# 服务端耗时的 p99，单位毫秒。直方图带 code 标签，要先按 le 把各 code 的桶加起来
+server_p99_ms       TODO
+
+# ---- 已经写好的 ----
+# 服务端平均耗时（毫秒）= 耗时之和的速率 ÷ 次数的速率
+server_mean_ms      1000 * sum(rate(http_request_duration_seconds_sum{route="${route}"}[${window}])) / sum(rate(http_request_duration_seconds_count{route="${route}"}[${window}]))
+# 在途请求数：每次抓取时的瞬时值，在窗口里取平均（Little's Law 的 L）
+inflight_avg        avg_over_time(http_inflight_requests{route="${route}"}[${window}])
+# 进程每秒用掉的 CPU 秒数，即平均占用几个核
+cpu_cores           rate(process_cpu_seconds_total{job="enrolld"}[${window}])
+# 平均每个请求用掉的 CPU（毫秒）
+cpu_ms_per_req      1000 * sum(rate(process_cpu_seconds_total{job="enrolld"}[${window}])) / sum(rate(http_requests_total{route="${route}"}[${window}]))
+# CPU 的饱和，两个层次：内核运行队列里平均有几个 enrolld 的线程在等核；goroutine 在 Go 运行时里等执行线程的 p99
+cpu_wait_threads    rate(process_cpu_wait_seconds_total{job="enrolld"}[${window}])
+sched_wait_p99_ms   1000 * histogram_quantile(0.99, rate(go_sched_latencies_seconds_bucket{job="enrolld"}[${window}]))
+# 连接池：平均占用、等连接的 p99、每次查询实际占用连接的时间
+pool_in_use_avg     avg_over_time(db_pool_in_use[${window}])
+pool_wait_p99_ms    1000 * histogram_quantile(0.99, sum by (le) (rate(db_pool_wait_seconds_bucket[${window}])))
+db_query_mean_ms    1000 * rate(db_query_duration_seconds_sum[${window}]) / rate(db_query_duration_seconds_count[${window}])
+# 写路径：每秒 fsync 次数、fsync 耗时、平均每次 fsync 带走几条记录
+fsync_per_s         rate(enroll_fsync_duration_seconds_count[${window}])
+fsync_mean_ms       1000 * rate(enroll_fsync_duration_seconds_sum[${window}]) / rate(enroll_fsync_duration_seconds_count[${window}])
+fsync_p99_ms        1000 * histogram_quantile(0.99, rate(enroll_fsync_duration_seconds_bucket[${window}]))
+batch_mean          rate(enroll_commit_batch_size_sum[${window}]) / rate(enroll_commit_batch_size_count[${window}])
+goroutines_max      max_over_time(go_goroutines{job="enrolld"}[${window}])
+
+# ---- 任务 1：服务端看到的 SLI = 成功（code="200"）且耗时不超过 ${slo} 秒的请求 ÷ 全部请求（L-08 第 19 页）----
+server_slo_good     TODO

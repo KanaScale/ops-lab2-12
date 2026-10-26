@@ -1,0 +1,6 @@
+# Windows 上检出时不要把脚本和 Makefile 改成 CRLF，否则在 Linux 上无法运行。
+*.sh       text eol=lf
+Makefile   text eol=lf
+*.go       text eol=lf
+*.yml      text eol=lf
+*.txt      text eol=lf

@@ -1,0 +1,15 @@
+# 实验 2 的 Prometheus 配置（指导书任务 1）。
+# 只抓本机的两个目标：enrolld 自己的 /metrics（服务层）和 node_exporter（资源层）。
+global:
+  scrape_interval: 5s      # 默认是 1 分钟；一个阶段只有 30 s，抓得太稀就看不出变化
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: enrolld
+    # 在途请求数、连接池占用是瞬时值，每次抓取只取一个样本；每秒抓一次，一个阶段才有二十多个样本可以平均
+    scrape_interval: 1s
+    static_configs:
+      - targets: ["127.0.0.1:8080"]
+  - job_name: node
+    static_configs:
+      - targets: ["127.0.0.1:9100"]
