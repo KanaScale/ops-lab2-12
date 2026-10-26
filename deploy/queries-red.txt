@@ -6,11 +6,11 @@
 
 # ---- 任务 1：RED 的三条线，以及最后一行的 SLI。把 TODO 换成你们写的 PromQL（参考 L-08 第 25 页），只看 route="${route}" 这个接口 ----
 # 每秒处理完的请求数（所有状态码）
-server_rps          TODO
+server_rps          sum(rate(http_requests_total{route="${route}"}[${window}]))
 # 5xx 占全部请求的比例。没有 5xx 时分子查不到任何序列，整个结果是空的，而不是 0；想要 0 可以在分子后面加 or vector(0)
-server_error_rate   TODO
+server_error_rate   (sum(rate(http_requests_total{route="${route}",code=~"5.."}[${window}])) or vector(0)) / sum(rate(http_requests_total{route="${route}"}[${window}]))
 # 服务端耗时的 p99，单位毫秒。直方图带 code 标签，要先按 le 把各 code 的桶加起来
-server_p99_ms       TODO
+server_p99_ms       1000 * histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route="${route}"}[${window}])))
 
 # ---- 已经写好的 ----
 # 服务端平均耗时（毫秒）= 耗时之和的速率 ÷ 次数的速率
@@ -36,4 +36,4 @@ batch_mean          rate(enroll_commit_batch_size_sum[${window}]) / rate(enroll_
 goroutines_max      max_over_time(go_goroutines{job="enrolld"}[${window}])
 
 # ---- 任务 1：服务端看到的 SLI = 成功（code="200"）且耗时不超过 ${slo} 秒的请求 ÷ 全部请求（L-08 第 19 页）----
-server_slo_good     TODO
+server_slo_good     sum(rate(http_request_duration_seconds_bucket{route="${route}",code="200",le="${slo}"}[${window}])) / sum(rate(http_request_duration_seconds_count{route="${route}"}[${window}]))

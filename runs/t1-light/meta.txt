@@ -1,0 +1,28 @@
+名字: t1-light
+开始: 2026-10-26T21:11:35+08:00
+主机: Linux 6.8.0-136-generic x86_64
+CPU: 2 个逻辑核；General Purpose Processor
+内存: 3531 MiB，available 2095 MiB
+数据目录: data → /dev/vda1（ext4），统计的磁盘: vda
+enrolld: pid 44982，绑定的核 1
+loadgen: 绑定的核 0
+接口: /api/courses/{id}；SLO 阈值 0.05s
+promsteps 变量: route=/api/courses/{id} slo=0.05 cpus=1 disk=vda
+仓库提交: 1f59204，未提交的改动 2 处
+压测命令: bin/loadgen '-url' 'http://127.0.0.1:8080/api/courses/1' '-rates' '0,50,100'
+enrolld /config:
+{
+  "addr": "127.0.0.1:8080",
+  "work": 200000,
+  "pool": 4,
+  "db_ms": 10,
+  "pool_timeout": "1s",
+  "sync": "each",
+  "sync_interval": "1s",
+  "data": "data",
+  "go_version": "go1.26.9",
+  "gomaxprocs": 1,
+  "gogc": "",
+  "pid": 44982,
+  "started": "2026-10-26T21:06:47+08:00"
+}
