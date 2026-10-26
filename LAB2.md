@@ -1,4 +1,4 @@
-# 实验 2 记录：第 <组号> 组
+# 实验 2 记录：第 12 组
 
 评分时依据本文件和 `runs/` 中的原始数据核对。本文件中的每一个数值，都须能在某个 `runs/<名字>/` 的文件中找到：表格用 `scripts/table.sh` 生成后粘贴，其他数值注明出处（例如“`runs/r1-pool4/red.csv` 第 6 阶段”）。不要只贴截图。将 `<填写>` 替换为本组的内容。
 
@@ -8,37 +8,47 @@
 
 | 项 | 内容 |
 |---|---|
-| 小组 | 第 <组号> 组 |
-| 仓库地址 | <https://github.com/…> |
-| 主机 | <云厂商与规格名，例如某云的 2 vCPU 4 GB 通用型；或学校的虚拟机> |
-| CPU | <`lscpu` 的 Model name；vCPU 数；`lscpu -e` 里每个 CPU 对应的 CORE> |
-| 内存 | <`free -m` 的 total> |
-| 数据目录所在的盘 | <`findmnt -T data` 的 SOURCE 和 FSTYPE；磁盘类型，如“通用型 SSD 云盘 40 GB”> |
-| 操作系统与内核 | <`/etc/os-release` 的 PRETTY_NAME；`uname -r`> |
-| Go、Prometheus、node_exporter | <`go version`；`tools/prometheus --version` 第一行；`tools/node_exporter --version` 第一行> |
-| 分核 | enrolld：<如 1>；loadgen、Prometheus、node_exporter：<如 0> |
+| 小组 | 第 12 组 |
+| 仓库地址 | https://github.com/KanaScale/ops-lab2-12 |
+| 主机 | 华为云 Flexus X，华东-上海一，通用计算型 x1.2u.4g（2 vCPU、4 GiB；规格来自 ECS 控制台截图） |
+| CPU | `General Purpose Processor`；2 个 vCPU；`lscpu -e` 显示 CPU 0 → CORE 0、CPU 1 → CORE 0 |
+| 内存 | `free -m` 的 Mem total：3531 MiB（云主机标称 4 GiB） |
+| 数据目录所在的盘 | `findmnt -T data`：SOURCE `/dev/vda1`，FSTYPE `ext4`；`lsblk`：`vda` 40G，`vda1` 挂载于 `/`；ECS 控制台显示系统盘为通用型 SSD 云盘、40 GiB |
+| 操作系统与内核 | `Ubuntu 24.04.4 LTS`；`6.8.0-136-generic` |
+| Go、Prometheus、node_exporter | `go version go1.26.9 linux/amd64`；`prometheus, version 3.13.4`；`node_exporter, version 1.12.1`（后两项取各工具 `--version` 输出的第一行） |
+| 分核 | enrolld：逻辑 CPU 1；loadgen、Prometheus、node_exporter：逻辑 CPU 0。两个逻辑 CPU 的 CORE 都是 0，无法分到不同物理核 |
 
 ## 2. 任务 0：基线
 
 `bin/enrolld -bench-fsync 2000` 连续运行三次的输出：
 
 ```text
-<粘贴三次的输出>
+fsync 次数 2000，总耗时 2.56 s，数据目录 data
+fsync 耗时（毫秒）：mean 1.276  p50 1.166  p90 1.610  p99 2.644  max 12.290
+按平均值推算，一个写者串行 fsync 每秒最多约 784 次（= 1000 / 1.276）
+fsync 次数 2000，总耗时 2.52 s，数据目录 data
+fsync 耗时（毫秒）：mean 1.253  p50 1.166  p90 1.532  p99 2.463  max 4.448
+按平均值推算，一个写者串行 fsync 每秒最多约 798 次（= 1000 / 1.253）
+fsync 次数 2000，总耗时 2.54 s，数据目录 data
+fsync 耗时（毫秒）：mean 1.262  p50 1.167  p90 1.600  p99 2.507  max 4.847
+按平均值推算，一个写者串行 fsync 每秒最多约 792 次（= 1000 / 1.262）
 ```
 
-按平均值计算，单个写者串行 fsync 每秒最多约 <填写> 次。三次之间相差多少？<填写>
+三次 `mean` 的平均值为 (1.276 + 1.253 + 1.262) / 3 ≈ 1.264 ms，按平均值计算，单个写者串行 fsync 每秒最多约 791 次（1000 / 1.264）。三次 `mean` 的最大差值为 0.023 ms，约为三次平均值的 1.8%；各次推算值为 784～798 次/秒。
 
 空载和运行 fsync 测试时各工具的读数（各观察 5 秒以上，填写典型值）：
 
+以下空载值跳过了工具启动后的第一组开机平均值；运行值只取 `bin/enrolld -bench-fsync 5000` 尚在执行时的稳定读数，不包含结束后回落的行。该次 5000 次测试输出的 `mean` 为 1.268 ms，总耗时 6.37 s；它只用于观察负载，不参与上面的三次平均值计算。
+
 | 工具与列 | 空载 | 运行 `-bench-fsync` 时 | 该列的含义 |
 |---|---|---|---|
-| `vmstat -w 1`：r、b | <填写> | <填写> | <填写> |
-| `vmstat -w 1`：us、sy、id、wa、st | <填写> | <填写> | <填写> |
-| `iostat -dx 1 <盘>`：w/s、wkB/s | <填写> | <填写> | <填写> |
-| `iostat -dx 1 <盘>`：w_await、f/s、f_await | <填写> | <填写> | <填写> |
-| `iostat -dx 1 <盘>`：aqu-sz、%util | <填写> | <填写> | <填写> |
+| `vmstat -w 1`：r、b | r=0、b=0 | r=0、b=1 | r：可运行或等待 CPU 的进程数；b：因 I/O 等待而阻塞的进程数 |
+| `vmstat -w 1`：us、sy、id、wa、st | us=0～1%、sy=0～1%、id=99～100%、wa=0%、st=0% | us=0～1%、sy=3～4%、id=49～53%、wa=45～47%、st=0% | CPU 时间占比：用户态、内核态、空闲、等待 I/O、被宿主机占用 |
+| `iostat -dx 1 vda`：w/s、wkB/s | 通常 w/s=0～2、wkB/s=0～8；偶见 8、52 | 稳定阶段 w/s=2308～2387、wkB/s=12580～13064 | 每秒写请求数、每秒写入量 |
+| `iostat -dx 1 vda`：w_await、f/s、f_await | 有写入时 w_await=0.50～1.00 ms；f/s 通常为 0、偶见 2；f_await=0 ms | w_await=0.40～0.42 ms、f/s=1539～1590、f_await=0.04 ms | 写请求平均等待时间（ms）、每秒 flush 次数、flush 平均等待时间（ms） |
+| `iostat -dx 1 vda`：aqu-sz、%util | 通常 aqu-sz=0、%util=0%；偶见 0.10、0.10% | aqu-sz=1.02～1.03、%util=95.20～97.20% | 平均在途 I/O 数、设备至少有一个 I/O 请求在处理的时间占比 |
 
-运行 fsync 测试时，CPU 是否繁忙？哪几列表明存在等待？<填写>
+运行 fsync 测试时，CPU 的计算部分并不繁忙：`us + sy` 约 3～5%，但 `wa` 达 45～47%，另有约 49～53% 的 `id`。等待主要体现在 `vmstat` 的 `b=1`、`wa` 升高；`iostat` 中 `aqu-sz` 约 1.02～1.03、`%util` 约 95～97%，也表明磁盘 I/O 持续活跃。不能只凭 `%util` 推断磁盘已达到吞吐上限。
 
 ## 3. 任务 1：指标流水线
 
