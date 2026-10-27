@@ -1,0 +1,28 @@
+名字: w1-each
+开始: 2026-10-27T13:35:39+08:00
+主机: Linux 6.8.0-136-generic x86_64
+CPU: 2 个逻辑核；General Purpose Processor
+内存: 3531 MiB，available 2914 MiB
+数据目录: data → /dev/vda1（ext4），统计的磁盘: vda
+enrolld: pid 235525，绑定的核 1
+loadgen: 绑定的核 0
+接口: /api/enroll；SLO 阈值 0.02s
+promsteps 变量: route=/api/enroll slo=0.02 cpus=1 disk=vda
+仓库提交: 5b2a604，未提交的改动 1 处
+压测命令: bin/loadgen '-url' 'http://127.0.0.1:8080/api/enroll' '-body' '{"student":"s{{seq}}","course":"c1"}' '-rates' '158,316,475,633,712,791,870,949'
+enrolld /config:
+{
+  "addr": "127.0.0.1:8080",
+  "work": 200000,
+  "pool": 4,
+  "db_ms": 10,
+  "pool_timeout": "1s",
+  "sync": "each",
+  "sync_interval": "1s",
+  "data": "data",
+  "go_version": "go1.26.9",
+  "gomaxprocs": 1,
+  "gogc": "",
+  "pid": 235525,
+  "started": "2026-10-27T13:33:10+08:00"
+}
