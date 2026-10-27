@@ -159,11 +159,12 @@ R1 的到达率（`scripts/rates.sh 384` 的输出）：`77,154,230,269,307,346,
 
 | 项 | 值与算法 |
 |---|---|
-| fsync 平均耗时（任务 0） | <填写> ms |
-| 推算的最大 TPS | <填写> |
-| 达到上限时 enrolld 大约使用几个核（写路径没有 spin，按 4.3 节拆分出的“spin 以外的开销”估计每个写请求的 CPU） | <填写> |
-| W1 的到达率（`scripts/rates.sh <最大 TPS> 0.2 0.4 0.6 0.8 0.9 1.0 1.1 1.2`） | <填写> |
+| fsync 平均耗时（任务 0） | (1.276 + 1.253 + 1.262) / 3 ≈ 1.264 ms  |
+| 推算的最大 TPS | 1000 / 1.264 ≈ 791 TPS |
+| 达到上限时 enrolld 大约使用几个核（写路径没有 spin，按 4.3 节拆分出的“spin 以外的开销”估计每个写请求的 CPU） | 按第 4.3 节，每请求非 spin CPU 开销约为 0.473579 × (1 − 87.90%) ≈ 0.0573 ms；达到预测上限 791 TPS 时，CPU 使用量约为 791 × 0.0573 / 1000 ≈ 0.045 核，即单核的约 4.5%。 |
+| W1 的到达率（`scripts/rates.sh <最大 TPS> 0.2 0.4 0.6 0.8 0.9 1.0 1.1 1.2`） | 以 791 TPS 为基准：158,316,475,633,712,791,870,949 请求/秒。 |
 
+预测 W1 先受到串行 fsync 的限制，最大吞吐量约为 791 TPS，此时 CPU 仍有较大余量。
 ### 5.2 W1：`-sync each`
 
 `scripts/table.sh runs/w1-<…> ok_rps error_rate p99_ms server_p99_ms cpu_cores fsync_per_s fsync_mean_ms batch_mean svc_cpu_busy cpu_iowait disk_w_per_s disk_w_await_ms disk_f_per_s disk_f_await_ms disk_aqu_sz disk_util`：
