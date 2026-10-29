@@ -1,0 +1,18 @@
+started_utc: 2026-10-29T09:32:45Z
+role: server; peer: 192.168.0.16; private_ip: 192.168.0.171; interface: eth0
+cpus: 0-1; rates: 50,100,200,400,600,800,950,1100,1400; step: 30s; response_bytes: 262144
+GOGC: 100; GOMAXPROCS: 2; timezone: UTC
+ecs-af06
+Linux ecs-af06 6.8.0-136-generic #136-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 21:53:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2
+               total        used        free      shared  buff/cache   available
+Mem:            3531         621         669          16        2546        2909
+Swap:              0           0           0
+lo               UNKNOWN        127.0.0.1/8 
+eth0             UP             192.168.0.171/24 
+192.168.0.16 dev eth0 src 192.168.0.171 uid 0 
+    cache 
+NTPSynchronized=yes
+1dfc55f81f4c8c0f14f0605b656b43f48d46fe272dd91688ace48ef4a77de727  bin/enrolld
+47f79e728d37d573abb9702f918c141604977f52
+finished_utc: 2026-10-29T09:41:59Z

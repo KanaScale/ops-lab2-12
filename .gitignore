@@ -1,3 +1,5 @@
 bin/
 tools/
 data/
+runs/o2-net-*/ss.log
+__pycache__/

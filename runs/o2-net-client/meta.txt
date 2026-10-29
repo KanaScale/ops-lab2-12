@@ -1,0 +1,18 @@
+started_utc: 2026-10-29T09:33:18Z
+role: client; peer: 192.168.0.171; private_ip: 192.168.0.16; interface: eth0
+cpus: 0-1; rates: 50,100,200,400,600,800,950,1100,1400; step: 30s; response_bytes: 262144
+GOGC: 100; GOMAXPROCS: 2; timezone: UTC
+ecs-7027
+Linux ecs-7027 6.8.0-136-generic #136-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 21:53:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2
+               total        used        free      shared  buff/cache   available
+Mem:            3531         512        2102           2        1158        3018
+Swap:              0           0           0
+lo               UNKNOWN        127.0.0.1/8 
+eth0             UP             192.168.0.16/24 
+192.168.0.171 dev eth0 src 192.168.0.16 uid 0 
+    cache 
+NTPSynchronized=yes
+d8b867d3d1cdb7423841232a584fa3b3cb63cb0d83cb84af405a6a24daee01a8  bin/loadgen
+verified_response_bytes: 262144
+finished_utc: 2026-10-29T09:37:50Z
