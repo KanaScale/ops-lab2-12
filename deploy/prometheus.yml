@@ -4,6 +4,9 @@ global:
   scrape_interval: 5s      # 默认是 1 分钟；一个阶段只有 30 s，抓得太稀就看不出变化
   evaluation_interval: 5s
 
+rule_files:
+  - deploy/rules.yml
+
 scrape_configs:
   - job_name: enrolld
     # 在途请求数、连接池占用是瞬时值，每次抓取只取一个样本；每秒抓一次，一个阶段才有二十多个样本可以平均

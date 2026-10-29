@@ -1,0 +1,22 @@
+# O3：读路径 30 天 SLO = 99% 的请求成功且服务端耗时 <= 50 ms。
+# 允许坏事件率 1%；短窗口燃烧率超过 2 表示坏事件率超过 2%。
+# 实验使用 1 分钟窗口和 20 秒 for，以便在一次短时过载中观察 firing。
+groups:
+  - name: lab2-read-slo
+    rules:
+      - alert: ReadSLOBudgetBurn
+        expr: |
+          (
+            1 - (
+              (sum(rate(http_request_duration_seconds_bucket{job="enrolld",route="/api/courses/{id}",code="200",le="0.05"}[1m])) or vector(0))
+              /
+              sum(rate(http_request_duration_seconds_count{job="enrolld",route="/api/courses/{id}"}[1m]))
+            )
+          ) / 0.01 > 2
+        for: 20s
+        labels:
+          severity: warning
+          route: /api/courses/{id}
+        annotations:
+          summary: "读路径错误预算燃烧率超过 2"
+          description: "最近 1 分钟的服务端 SLI 坏事件率超过 2%；当前燃烧率 {{ $value }}。"

@@ -376,7 +376,7 @@ R1 九个阶段 p99 的算术平均为 357.8211 ms，`all` 为 1011.19 ms。分�
 |---|---|
 | O1 内存与 GC | 已完成，测前预测、两组实测与结论见第 7.1 节；证据在 `runs/o1-gogc100/`、`runs/o1-gogc400/`。 |
 | O2 网络 | 已完成，拓扑、测前预测、两端采样及结论见第 7.2 节；证据在 `runs/o2-net-server/` 和 `runs/o2-net-client/`。 |
-| O3 告警与看板 | <未做 / 规则文件、触发记录、看板说明> |
+| O3 告警与看板 | 告警规则、九格 Grafana 看板和测前预测见第 7.3 节；过载触发记录待云主机实测补入。 |
 | O4 迁移到小组项目 | <未做 / 仓库链接、测了哪个资源、结论> |
 
 ### 7.1 O1：内存与 GC（测前预测）
@@ -425,6 +425,30 @@ R1 九个阶段 p99 的算术平均为 357.8211 ms，`all` 为 1011.19 ms。分�
 复核：`python3 scripts/analyze-o2.py` 从两端原始文件重算本表。原始 `ss.log.gz` 保存 `ss -tin` 的 TCP 状态；过载阶段的服务端快照可见 `bytes_retrans`、`retrans` 增长，与 `sar.log` 的重传趋势一致。`sar` 的发送量含重传和协议开销，超时请求的部分响应也会进入网卡计数，因此过载阶段的发送量不能直接除以 256 KiB 当作成功吞吐量。
 
 结论：本次最高无错误、无丢弃的阶段是目标 950 请求/秒，成功 946.8 请求/秒，客户端 p99 仅 2.34 ms；响应体有效吞吐约 `946.8 × 262144 × 8 ≈ 1.986 Gbit/s`。目标 1100 时，B 的网卡接收约 2.108 Gbit/s，与目标 950 时的约 2.093 Gbit/s 接近，但成功吞吐降到 803.4 请求/秒、26.86% 的请求超时，p99 跳到 1951.68 ms；目标 1400 时接收仍约 2.025 Gbit/s，成功吞吐进一步下降。A 的 TCP 重传从目标 950 阶段约 1343 段/秒升至 1100 阶段约 31662 段/秒，说明网络拥塞和排队显著增加。两端 CPU 均未整体耗尽：1100 阶段 A、B 仍分别约有 47.7%、32.4% 空闲，虽然 B 的软中断已占约 37.1%，是附带压力。综合判断，本次链路在约 **2 Gbit/s 接收流量、约 947 个成功的 256 KiB 响应/秒**附近达到可持续上限；与测前按 2 Gbit/s 推出的约 954 请求/秒相近，而 0.2 Gbit/s 基准值并未在本次成为硬上限。由于 A/B 同为 2 vCPU X1 且内网额度相同，本次结果不能单独证明 A 发出端还是 B 接收端首先限速。若要严格区分，需换更高带宽的接收端再测 A。
+
+### 7.3 O3：读路径 SLO 告警与三行九格（测前预测）
+
+读路径仍是 `GET /api/courses/{id}`，SLO 为“30 天内 99% 的读请求在 50 ms 内成功返回”。错误预算为 1%。`deploy/rules.yml` 的 `ReadSLOBudgetBurn` 将最近 1 分钟的坏事件率（非 200 或服务端耗时超过 50 ms）除以 0.01，燃烧率 **> 2** 且持续 20 秒时进入 `firing`。`deploy/prometheus.yml` 用 `rule_files` 加载该文件，每 5 秒评估。`le="0.05"` 正好是服务端直方图已有的桶上界；没有成功请求时分子按 0 处理。无读请求时不告警。此规则使用服务端指标，无法看到客户端发送排队、网络延迟或未抵达服务的失败，因此它是实验用的服务端近似告警，不能替代第 6 节讨论的用户边界 SLI。短窗口和低阈值为本次过载演示设计；生产告警还需按业务响应时长、误报容忍度和长短窗口共同设计。
+
+**预测（过载测量前写）：** R1 实测目标 346 请求/秒时，客户端达标率 96.85%，对应燃烧率 3.15，已高于本规则的阈值 2；目标 461 请求/秒时客户端达标率为 0。若旧服务器仍用相同的 4 连接池与绑核配置，持续 461 请求/秒 120 秒，预期服务端坏事件率超过 2%，告警由 `pending` 变成 `firing`。服务端与客户端口径不同，实际触发时间和值必须以 `/api/v1/alerts` 的记录为准。燃烧率 2 表示若持续同样的坏事件率，30 天额度约 15 天用完，并非一定在 15 天后才应报警。
+
+运行 `scripts/o3.sh` 会保存 `runs/o3-read-alert/steps.csv`、`loadgen.log`、`rules-before.json`、每 5 秒抓取的 `alerts-history.jsonl` 和首次 `firing` 时的完整 `/api/v1/alerts` 响应 `alert-firing.json`。由于该接口只返回当前活动告警，采集在压测进行期间启动，不能等压测结束后再查询。拿到实测文件后再填触发时刻、燃烧率和实测分析。
+
+三行九格按 L-08 第 29 页的“业务 → 服务 RED 与排队 → 资源 USE”排列。可将 `deploy/o3-dashboard.json` 导入 Grafana，并在导入时选择本实验的 Prometheus 数据源；面板使用 1 分钟窗口、5 秒刷新。下表列出每格实际使用的 PromQL，多个查询用分号分隔。这里的“在线人数”无法由现有指标直接得到，所以以已确认选课数和提交成功率表示业务结果；在途请求明确标为服务并发量，不冒充独立用户数。原课件的 MySQL 磁盘格在此实验改为本机 `vda` 云盘，因为服务模拟数据库，没有 MySQL。
+
+| 行 | 格 | 显示内容与 PromQL |
+|---|---|---|
+| 业务 | 1 | 读请求 SLO 达标率（%）：`100 * ((sum(rate(http_request_duration_seconds_bucket{job="enrolld",route="/api/courses/{id}",code="200",le="0.05"}[1m])) or vector(0)) / sum(rate(http_request_duration_seconds_count{job="enrolld",route="/api/courses/{id}"}[1m])))` |
+| 业务 | 2 | 每秒已确认选课数：`rate(enroll_commits_total{job="enrolld"}[1m])` |
+| 业务 | 3 | 选课提交成功率（%）：`100 * sum(rate(http_requests_total{job="enrolld",route="/api/enroll",code="200"}[1m])) / sum(rate(http_requests_total{job="enrolld",route="/api/enroll"}[1m]))` |
+| 服务 | 4 | 读请求 QPS：`sum(rate(http_requests_total{job="enrolld",route="/api/courses/{id}"}[1m]))`；5xx 比例（%）：`100 * ((sum(rate(http_requests_total{job="enrolld",route="/api/courses/{id}",code=~"5.."}[1m])) or vector(0)) / sum(rate(http_requests_total{job="enrolld",route="/api/courses/{id}"}[1m])))`，分别用左右轴。 |
+| 服务 | 5 | 读请求 p50/p99（ms）：`1000 * histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job="enrolld",route="/api/courses/{id}"}[1m])))`；`1000 * histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job="enrolld",route="/api/courses/{id}"}[1m])))`。 |
+| 服务 | 6 | 在途请求：`http_inflight_requests{job="enrolld",route="/api/courses/{id}"}`；连接池占用：`db_pool_in_use{job="enrolld"}`；池大小：`db_pool_size{job="enrolld"}`。占用接近上限且在途继续上升，提示排队。 |
+| 资源 | 7 | enrolld 所绑 CPU 1 忙碌率（%）：`100 * sum(rate(node_cpu_seconds_total{job="node",cpu="1",mode!~"idle|iowait"}[1m]))`。 |
+| 资源 | 8 | 可用内存（MiB）：`node_memory_MemAvailable_bytes{job="node"} / 1048576`。 |
+| 资源 | 9 | `vda` 磁盘忙碌率（%）：`100 * rate(node_disk_io_time_seconds_total{job="node",device="vda"}[1m])`。 |
+
+查询中的 `job="enrolld"`、`job="node"` 来自 `deploy/prometheus.yml`。业务第 2、3 格在仅压测读路径时会为空或无新写入，不代表故障。资源第 7、9 格依赖当前 CPU 1 与盘名 `vda`；若部署改变，应相应改查询。Grafana 的 Prometheus 数据源若运行在另一台主机，须通过 SSH 隧道或可达内网地址连接 9090，不能在另一台主机的数据源里填写其本地 `127.0.0.1:9090`。
 
 ## 8. 成员分工
 
