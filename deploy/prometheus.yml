@@ -5,7 +5,7 @@ global:
   evaluation_interval: 5s
 
 rule_files:
-  - deploy/rules.yml
+  - rules.yml
 
 scrape_configs:
   - job_name: enrolld
