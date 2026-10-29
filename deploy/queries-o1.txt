@@ -1,0 +1,8 @@
+# O1：同一到达率下比较 GOGC=100 与 GOGC=400。
+# promsteps 默认去掉阶段开始的 5 秒，因此这些值都来自同一稳定窗口。
+# increase() 按抓取样本外推；GC 次数的结果可能不是整数。
+gc_cycles_increase       increase(go_gc_cycles_total{job="enrolld"}[${window}])
+gc_cpu_seconds_increase  increase(go_gc_cpu_seconds_total{job="enrolld"}[${window}])
+rss_avg_mib              avg_over_time(process_resident_memory_bytes{job="enrolld"}[${window}]) / 1048576
+rss_max_mib              max_over_time(process_resident_memory_bytes{job="enrolld"}[${window}]) / 1048576
+heap_avg_mib             avg_over_time(go_heap_objects_bytes{job="enrolld"}[${window}]) / 1048576

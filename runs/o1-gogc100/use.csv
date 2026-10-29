@@ -1,0 +1,2 @@
+step,target_rps,svc_cpu_busy,all_cpu_busy,cpu_steal,cpu_iowait,procs_running_avg,cpu_psi_some,mem_available_min_mb,swap_in_per_s,disk_w_per_s,disk_wkb_per_s,disk_w_await_ms,disk_f_per_s,disk_f_await_ms,disk_aqu_sz,disk_util
+1,100,0.107,0.0635,0,0.0002,2.09091,0.081394,2880.29,0,2.96,20.88,0.662162,0.5,0.08,0.002,0.00062

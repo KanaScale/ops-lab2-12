@@ -1,0 +1,2 @@
+step,target_rps,gc_cycles_increase,gc_cpu_seconds_increase,rss_avg_mib,rss_max_mib,heap_avg_mib
+1,100,1375,0.349256,25.3784,25.4492,6.08697
