@@ -1,0 +1,1 @@
+{"status":"success","data":{"alerts":[{"labels":{"alertname":"ReadSLOBudgetBurn","route":"/api/courses/{id}","severity":"warning"},"annotations":{"description":"最近 1 分钟的服务端 SLI 坏事件率超过 2%；当前燃烧率 98.59330882189424。","summary":"读路径错误预算燃烧率超过 2"},"state":"firing","activeAt":"2026-10-29T12:18:40.803929395Z","value":"9.859330882189424e+01"}]}}
