@@ -115,6 +115,13 @@ R1 的到达率（`scripts/rates.sh 384` 的输出）：`77,154,230,269,307,346,
 
 >PS：从表中可以看出当 RPS 达到预测上限的 1.0、1.1、1.2 倍时，pool_in_use_avg 达到 4，说明连接已经供不应求了，但 svc_cpu_busy 最多只有 0.204，说明 CPU 利用率还很低。这说明 R1 场景下，随着加压，连接池先达到上限。
 
+#### R1 复现指令
+```sh
+RATES=$(scripts/rates.sh 384)
+scripts/run.sh r1-verify -url http://127.0.0.1:8080/api/courses/1 -rates "$RATES"
+scripts/table.sh runs/r1-verify ok_rps error_rate p99_ms server_p99_ms server_mean_ms inflight_avg cpu_ms_per_req pool_in_use_avg pool_wait_p99_ms sched_wait_p99_ms svc_cpu_busy procs_running_avg
+```
+
 ### 4.3 CPU 消耗在何处
 
 在约 0.8 倍预测上限（307 请求/秒）的负载下采集 20 秒 CPU 剖析，`go tool pprof -top` 的前 10 行（同时保存在 `runs/r1-pool4/pprof-top.txt`）：
@@ -134,6 +141,16 @@ R1 的到达率（`scripts/rates.sh 384` 的输出）：`77,154,230,269,307,346,
 ```
 
 `main.spin` 占 87.90% 的 CPU 样本。按本次的吞吐量和 enrolld 消耗的 CPU 计算，enrolld 每秒使用 0.147974 核、服务端每秒处理 312.458 个请求，故每请求 CPU 为 `1000 × 0.147974 ÷ 312.458 ≈ 0.474` ms。其中 spin 约 `0.473579 × 87.90% ≈ 0.416` ms，其余约 `0.057` ms，消耗主要用于 HTTP 读写、系统调用和 Go 运行时。
+
+#### CPU 消耗复现指令
+```sh
+taskset -c 0 bin/loadgen -url http://127.0.0.1:8080/api/courses/1 \
+  -rates "$(scripts/rates.sh 384 0.8)" -step 40s > /dev/null 2>&1 &
+LG=$!
+sleep 10
+go tool pprof -top -nodecount=15 'http://127.0.0.1:8080/debug/pprof/profile?seconds=20'
+wait "$LG"
+```
 
 ### 4.4 R2：调大连接池（预测在 R2 之前写）
 
@@ -161,9 +178,21 @@ R1 的到达率（`scripts/rates.sh 384` 的输出）：`77,154,230,269,307,346,
 最大吞吐量 2340.0 请求/秒（出现在第 6 阶段）。比预测的 C=2127 高 213 请求/秒，约高 10.0%。
 解释：第 6 阶段的每请求 CPU 已降至 0.409424 ms（表中 `cpu_ms_per_req` 字段）；据此重算的 CPU 上限约 `1000 ÷ 0.409424 ≈ 2442` 请求/秒，说明预测偏保守。
 
->PS：同 R2 的分析，当 RPS 来到 2127 * 1.25 = 2659 时，svc_cpu_busy = 1，CPU 已经跑满了，但是 pool_in_use_avg 只有 38.4 < 45，还有余量。说明 R2 场景下，随着加压，CPU 先达到上限。此时大量请求排队，队列长度单调增长，直到请求超时，p99 暴涨到 2s。
+>PS：同 R1 的分析，当 RPS 来到 2127 * 1.25 = 2659 时，svc_cpu_busy = 1，CPU 已经跑满了，但是 pool_in_use_avg 只有 38.4 < 45，还有余量。说明 R2 场景下，随着加压，CPU 先达到上限。此时大量请求排队，队列长度单调增长，直到请求超时，p99 暴涨到 2s。
+
+#### R2 复现指令：
+```sh
+RATES=$(scripts/rates.sh 2127 0.3 0.6 0.8 0.9 1.0 1.1 1.25 1.5)   
+scripts/run.sh r2-verify -url http://127.0.0.1:8080/api/courses/1 -rates "$RATES"
+scripts/table.sh runs/r2-verify ok_rps error_rate p99_ms server_p99_ms inflight_avg cpu_cores cpu_ms_per_req cpu_wait_threads sched_wait_p99_ms pool_in_use_avg svc_cpu_busy procs_running_avg cpu_psi_some
+```
 
 ## 5. 任务 3：写路径
+
+>PS：任务 3 复测前必须先跑一下 benchmark 测一下当前的 fsync_mean_ms，如果出现波动，就需要用新的预测值 `1000 / fsync_mean_ms` 来跑
+
+`for i in 1 2 3; do bin/enrolld -bench-fsync 2000; done`
+`bin/enrolld -bench-fsync 5000`
 
 ### 5.1 预测：`-sync each`（W1 之前写）
 
@@ -196,6 +225,17 @@ W1 在第 6 阶段（目标 791 请求/秒）获得本次最高客户端成功�
 第 6 阶段 enrolld 使用 `cpu_cores` = 0.0716867 核，高于预测的约 0.045 核，但仍远未耗尽一个核；而磁盘利用率为 `disk_util` = 93.235%，平均 I/O 队列长度为 `disk_aqu_sz` = 1.0022，请求逐渐积压。**可见串行 fsync 路径先达到上限**。
 
 数据来源：runs/w1-each/steps.csv、red.csv、use.csv 和 loadgen.log
+
+#### W1 复现指令
+```sh
+rm -f data/enroll.log; taskset -c 1 bin/enrolld -sync each      # 终端 A
+
+export SLO=0.02
+B='{"student":"s{{seq}}","course":"c1"}'
+RATES=$(scripts/rates.sh 791 0.2 0.4 0.6 0.8 0.9 1.0 1.1 1.2)
+scripts/run.sh w1-each-verify -url http://127.0.0.1:8080/api/enroll -body "$B" -rates "$RATES"
+scripts/table.sh runs/w1-each-verify ok_rps error_rate p99_ms server_p99_ms cpu_cores fsync_per_s fsync_mean_ms batch_mean svc_cpu_busy cpu_iowait disk_w_per_s disk_w_await_ms disk_f_per_s disk_f_await_ms disk_aqu_sz disk_util
+```
 
 ### 5.3 预测：`-sync group`（W2 之前写）
 
@@ -243,6 +283,15 @@ W2 第 8 阶段成功吞吐量为 3160.3 TPS，无错误，p99 为 5.52 ms。此
 数据来源：runs/w1-each/steps.csv、red.csv、use.csv，
 以及 runs/w2-group/steps.csv、red.csv、use.csv。
 
+#### W2 复现指令
+```sh
+rm -f data/enroll.log; taskset -c 1 bin/enrolld -sync group     # 终端 A 
+
+RATES=$(scripts/rates.sh 791 0.4 0.8 1.0 1.5 2 3 4)
+scripts/run.sh w2-group-verify -url http://127.0.0.1:8080/api/enroll -body "$B" -rates "$RATES"
+scripts/table.sh runs/w2-group-verify ok_rps error_rate p99_ms server_p99_ms cpu_cores fsync_per_s fsync_mean_ms batch_mean svc_cpu_busy cpu_iowait disk_w_per_s disk_w_await_ms disk_f_per_s disk_f_await_ms disk_aqu_sz disk_util
+```
+
 ### 5.5 W3：`-sync interval`
 
 （列与 5.2 相同）
@@ -265,6 +314,15 @@ W2 第 8 阶段成功吞吐量为 3160.3 TPS，无错误，p99 为 5.52 ms。此
 
 数据来源：runs/w2-group/steps.csv、red.csv、use.csv，
 以及 runs/w3-interval/steps.csv、red.csv、use.csv。
+
+#### W3 复现指令
+```sh
+rm -f data/enroll.log; taskset -c 1 bin/enrolld -sync interval  # 终端 A
+
+RATES=$(scripts/rates.sh 791 0.4 1.5 4)
+scripts/run.sh w3-interval-verify -url http://127.0.0.1:8080/api/enroll -body "$B" -rates "$RATES"
+scripts/table.sh runs/w3-interval-verify ok_rps error_rate p99_ms server_p99_ms cpu_cores fsync_per_s fsync_mean_ms batch_mean svc_cpu_busy cpu_iowait disk_w_per_s disk_w_await_ms disk_f_per_s disk_f_await_ms disk_aqu_sz disk_util
+```
 
 ## 6. 分析问题
 
@@ -445,7 +503,7 @@ W3 的 interval 在写入页缓存后就返回成功，后台约每秒 fsync；
 
 #### 4.2 列出只计入客户端的时间组成。
 客户端额外覆盖、服务端计时器没有完整覆盖的时间主要有：
--  **压测机发送滞后**：计划该发了，但 loadgen 的 goroutine 晚一点才开始执行。、
+-  **压测机发送滞后**：计划该发了，但 loadgen 的 goroutine 晚一点才开始执行。
 -  **客户端准备和发出请求**：构造请求、取得可复用连接；需要新连接时还包括建立连接。
 -  **请求到达服务端处理函数之前的时间**：本实验走本机回环网络，仍有网络协议栈、服务端接收及进入处理函数前的等待。
 -  **处理函数返回后，客户端读完响应的时间**：包括剩余的响应传递、读取响应体等。
@@ -634,6 +692,14 @@ A、B 各使用自身的 CPU 0–1，避免人为只分配一个核造成 CPU �
 运行 `scripts/o3.sh` 保存了 `runs/o3-read-alert/steps.csv`、`loadgen.log`、`rules-before.json`、每 5 秒抓取的 `alerts-history.jsonl` 和首次观测到 `firing` 时的完整 `/api/v1/alerts` 响应 `alert-firing.json`。由于该接口只返回当前活动告警，采集在压测进行期间启动，而不是等压测结束后再查询。
 
 #### 实验结果：
+
+`scripts/table.sh runs/o3-read-alert sent ok http_err ok_rps error_rate p99_ms slo_good lag_p99_ms gen_cpu_pct`
+| step | target_rps | sent | ok | http_err | ok_rps | error_rate | p99_ms | slo_good | lag_p99_ms | gen_cpu_pct |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 461 | 55639 | 45376 | 10263 | 378.1 | 0.1845 | 1011.98 | 0.0022 | 1.06 | 4 |
+| all | - | 55639 | 45376 | 10263 | 378.1 | 0.1845 | 1011.98 | 0.0022 | 1.06 | 4 |
+
+
 - `rules-before.json` 显示 Prometheus 已加载 `deploy/rules.yml`，规则健康状态为 `ok`、评估间隔 5 秒；压测前规则为 `inactive`。
 - `server-config.json` 记录 `-pool 4`、`-work 200000`、`-db-ms 10`、`GOMAXPROCS=1`。
 - 本次在 2026-10-29 20:18:39～20:20:39（北京时间）以目标 461 请求/秒持续 120 秒。客户端共发出 55,639 次请求，45,376 次成功（378.1 次/秒），10,263 次收到 503，无超时、网络错误或丢弃；
